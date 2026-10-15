@@ -99,6 +99,10 @@ namespace RuleRunner.UI
             le.flexibleHeight = flexibleHeight;
             if (preferredWidth >= 0) le.minWidth = preferredWidth;
             if (preferredHeight >= 0) le.minHeight = preferredHeight;
+            // A fixed size means "don't stretch" unless flexibility was asked for explicitly
+            // (nested layout groups otherwise report flexible size 1 and fill the parent).
+            if (preferredWidth >= 0 && flexibleWidth < 0) le.flexibleWidth = 0;
+            if (preferredHeight >= 0 && flexibleHeight < 0) le.flexibleHeight = 0;
             return le;
         }
 
