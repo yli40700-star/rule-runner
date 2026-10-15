@@ -1,0 +1,17 @@
+{
+    "name": "RuleRunner.Editor",
+    "rootNamespace": "RuleRunner.EditorTools",
+    "references": [
+        "RuleRunner.Core",
+        "RuleRunner.Levels"
+    ],
+    "includePlatforms": ["Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
