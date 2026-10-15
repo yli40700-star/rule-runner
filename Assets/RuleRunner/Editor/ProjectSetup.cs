@@ -1,5 +1,6 @@
 using RuleRunner.App;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -42,6 +43,9 @@ namespace RuleRunner.EditorTools
             PlayerSettings.defaultWebScreenHeight = 720;
             PlayerSettings.runInBackground = true;
             PlayerSettings.SplashScreen.showUnityLogo = false;
+            // Full-window 16:9 canvas with a loading bar (Assets/WebGLTemplates/RuleRunner).
+            PlayerSettings.WebGL.template = "PROJECT:RuleRunner";
+            PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.WebGL, ManagedStrippingLevel.Medium);
             Debug.Log("[RuleRunner] Player Settings applied (WebGL compression disabled).");
         }
     }
