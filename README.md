@@ -7,7 +7,7 @@ CSCI 526 team project. Unity **6000.6.0f1**, WebGL, deployed with GitHub Pages.
 
 | Build | Link |
 |---|---|
-| Beta | `https://<user>.github.io/<repo>/beta/` (Pages: `main` branch, `/docs` folder) |
+| Beta | https://yli40700-star.github.io/rule-runner/beta/ (Pages: `main` branch, `/docs` folder) |
 
 ## Project layout (one module per owner)
 
