@@ -1,9 +1,10 @@
 using RuleRunner.Core;
 using RuleRunner.View;
+using RuleRunner.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace RuleRunner.UI
+namespace RuleRunner.Cards
 {
     /// <summary>
     /// Tiny diagrams drawn with basic shapes: the runner plus the next three cells.

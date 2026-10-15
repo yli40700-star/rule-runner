@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using RuleRunner.Core;
+using RuleRunner.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace RuleRunner.UI
+namespace RuleRunner.Cards
 {
     /// <summary>Modal grid of option tiles (each with its mini diagram) for picking a card's condition or action.</summary>
     public class OptionPicker : MonoBehaviour

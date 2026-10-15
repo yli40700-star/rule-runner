@@ -1,9 +1,10 @@
 using System;
 using RuleRunner.Core;
+using RuleRunner.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace RuleRunner.UI
+namespace RuleRunner.Cards
 {
     /// <summary>
     /// A rule as a "skill card" the runner equips:

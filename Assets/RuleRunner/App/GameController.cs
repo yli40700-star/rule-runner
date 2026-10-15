@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using RuleRunner.Analytics;
+using RuleRunner.Cards;
 using RuleRunner.Core;
 using RuleRunner.Levels;
 using RuleRunner.UI;
@@ -24,6 +25,7 @@ namespace RuleRunner.App
         MapView map;
         RunnerView runner;
         GameScreen gameScreen;
+        LoadoutPanel loadout;
         LevelSelectScreen levelSelect;
         ResultPopup resultPopup;
         AnalyticsTracker analytics;
@@ -82,7 +84,8 @@ namespace RuleRunner.App
             var canvasRect = (RectTransform)canvasGo.transform;
 
             var picker = OptionPicker.Create(canvasRect);
-            gameScreen = GameScreen.Create(canvasRect, picker);
+            gameScreen = GameScreen.Create(canvasRect);
+            loadout = LoadoutPanel.Create(gameScreen.LoadoutArea, picker);
             levelSelect = LevelSelectScreen.Create(canvasRect, IsCleared);
             resultPopup = ResultPopup.Create(canvasRect);
             picker.transform.SetAsLastSibling();
@@ -127,7 +130,8 @@ namespace RuleRunner.App
             if (!rulesByLevel.TryGetValue(level.Id, out var rules))
                 rulesByLevel[level.Id] = rules = new List<Rule>();
             gameScreen.Show();
-            gameScreen.Setup(level, rules);
+            gameScreen.Setup(level);
+            loadout.Setup(level, rules);
             ResetRun();
             analytics.LevelStarted(level.Id);
         }
@@ -138,8 +142,9 @@ namespace RuleRunner.App
         {
             if (level == null || playback != null) return;
             ResetRun();
-            gameScreen.SetEditable(false);
-            var rules = new List<Rule>(gameScreen.Rules.ConvertAll(r => r.Clone()));
+            gameScreen.SetRunning(true);
+            loadout.SetEditable(false);
+            var rules = new List<Rule>(loadout.Rules.ConvertAll(r => r.Clone()));
             var result = Simulator.Run(level, rules);
             analytics.RunFinished(level, rules, result);
             gameScreen.Log("--- Run: " + rules.Count + (rules.Count == 1 ? " card" : " cards") + ", qi " + level.Qi + " ---", Theme.Dim);
@@ -153,9 +158,10 @@ namespace RuleRunner.App
             if (level == null) return;
             map.ResetState();
             runner.Place(level.Start, level.Dir);
-            gameScreen.SetEditable(true);
-            gameScreen.SetQi(level.Qi, level.Qi);
-            gameScreen.HighlightRule(-1, -1);
+            gameScreen.SetRunning(false);
+            loadout.SetEditable(true);
+            loadout.SetQi(level.Qi, level.Qi);
+            loadout.HighlightRule(-1, -1);
             gameScreen.HideFloat();
         }
 
@@ -172,12 +178,12 @@ namespace RuleRunner.App
             {
                 float step = BaseStepSeconds / speed;
                 map.SetTime(f.T);
-                gameScreen.HighlightRule(f.FiredRule, f.StarvedRule);
+                loadout.HighlightRule(f.FiredRule, f.StarvedRule);
 
                 if (f.FiredRule >= 0)
                 {
                     hits[f.FiredRule]++;
-                    gameScreen.SetHits(hits);
+                    loadout.SetHits(hits);
                     var rule = rules[f.FiredRule];
                     int cost = Vocabulary.Cost(rule.Action);
                     string label = "Card " + (f.FiredRule + 1) + ": " + Vocabulary.Display(rule.Action) + (cost > 0 ? " -" + cost : "");
@@ -188,14 +194,14 @@ namespace RuleRunner.App
                     gameScreen.ShowFloat(cameraFitter.WorldToCanvasPoint(runner.HeadPosition, gameScreen.CanvasRect),
                         "Card " + (f.StarvedRule + 1) + ": no qi!", step * 1.2f);
                 }
-                gameScreen.SetQi(f.Qi, level.Qi);
+                loadout.SetQi(f.Qi, level.Qi);
                 gameScreen.Log(DescribeStep(f, rules), f.StarvedRule >= 0 ? new Color(1f, 0.6f, 0.6f) : (Color?)null);
 
                 yield return runner.PlayStep(f, step);
                 if (f.CollectedOrb) map.CollectOrb(f.X);
             }
 
-            gameScreen.HighlightRule(-1, -1);
+            loadout.HighlightRule(-1, -1);
             gameScreen.Log("Result: " + Vocabulary.Describe(result.Outcome) + "  (qi left " + result.QiLeft + ")",
                 result.Won ? new Color(0.5f, 0.9f, 0.55f) : new Color(1f, 0.55f, 0.55f));
             yield return runner.PlayOutcome(result.Outcome, 0.7f);
