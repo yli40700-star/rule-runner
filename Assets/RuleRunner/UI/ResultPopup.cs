@@ -5,43 +5,57 @@ using UnityEngine.UI;
 
 namespace RuleRunner.UI
 {
-    /// <summary>End-of-run message with a cause-specific hint (design doc section 5.2).</summary>
+    /// <summary>End-of-run card with stats and a cause-specific hint (design doc section 5.2).</summary>
     public class ResultPopup : MonoBehaviour
     {
         public event Action NextLevel, EditRules, BackToLevels;
 
-        Text title, message, hint;
+        Text title, cause, hint, qiValue, stepValue, cardValue;
+        Image accent;
         Button nextButton, editButton;
-        Image box;
 
         public static ResultPopup Create(Transform canvas)
         {
             var root = UIKit.Fill(canvas, "ResultPopup");
-            root.gameObject.AddComponent<Image>().color = new Color(0, 0, 0, 0.45f);
+            root.gameObject.AddComponent<Image>().color = new Color(0.03f, 0.04f, 0.06f, 0.6f);
             var popup = root.gameObject.AddComponent<ResultPopup>();
 
-            popup.box = UIKit.Panel(root, "Box", UIKit.PanelLight, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            popup.box.rectTransform.sizeDelta = new Vector2(560, 300);
+            var box = UIKit.Box(root, "Box", Theme.Surface, 20f, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            box.rectTransform.sizeDelta = new Vector2(540, 340);
+            UIKit.DropShadow(box, 10f, 0.55f);
+            var b = box.transform;
 
-            var titleRt = UIKit.Rect(popup.box.transform, "TitleArea", new Vector2(0, 1), new Vector2(1, 1), new Vector2(20, -70), new Vector2(-20, -16));
-            popup.title = UIKit.Label(titleRt, "Title", "", 36, TextAnchor.MiddleCenter);
-            var msgRt = UIKit.Rect(popup.box.transform, "MessageArea", new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -130), new Vector2(-24, -74));
-            popup.message = UIKit.Label(msgRt, "Message", "", 22, TextAnchor.MiddleCenter);
-            var hintRt = UIKit.Rect(popup.box.transform, "HintArea", new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -210), new Vector2(-24, -134));
-            popup.hint = UIKit.Label(hintRt, "Hint", "", 22, TextAnchor.MiddleCenter, new Color32(0xf5, 0xd0, 0x3b, 0xff));
-            popup.hint.fontStyle = FontStyle.Italic;
+            popup.accent = UIKit.Box(b, "Accent", Theme.Accent, 4f, new Vector2(0, 1), new Vector2(1, 1), new Vector2(24, -10), new Vector2(-24, -4));
+            popup.title = UIKit.Label(UIKit.TopStrip(b, "Title", 24f, 48f, 24f, 24f), "Text", "", 38, TextAnchor.MiddleCenter, Theme.Text, FontStyle.Bold);
+            popup.cause = UIKit.Label(UIKit.TopStrip(b, "Cause", 74f, 26f, 24f, 24f), "Text", "", 18, TextAnchor.MiddleCenter, Theme.Dim);
 
-            var buttons = UIKit.Rect(popup.box.transform, "Buttons", new Vector2(0, 0), new Vector2(1, 0), new Vector2(24, 20), new Vector2(-24, 74));
-            UIKit.HRow(buttons, 12, null, expandWidth: true);
-            var levels = UIKit.Button(buttons, "Levels", "Level list", 22, UIKit.ButtonColor, () => popup.Fire(popup.BackToLevels));
-            UIKit.Layout(levels, flexibleWidth: 1);
-            popup.editButton = UIKit.Button(buttons, "Edit", "Edit rules", 22, UIKit.ButtonColor, () => popup.Fire(popup.EditRules));
-            UIKit.Layout(popup.editButton, flexibleWidth: 1);
-            popup.nextButton = UIKit.Button(buttons, "Next", "Next level", 22, UIKit.AccentColor, () => popup.Fire(popup.NextLevel));
-            UIKit.Layout(popup.nextButton, flexibleWidth: 1);
+            var stats = UIKit.TopStrip(b, "Stats", 112f, 64f, 40f, 40f);
+            UIKit.HRow(stats, 12, null, true);
+            popup.qiValue = Stat(stats, "QI LEFT", Theme.Qi);
+            popup.stepValue = Stat(stats, "STEPS", Theme.Text);
+            popup.cardValue = Stat(stats, "CARDS", Theme.Gold);
+
+            popup.hint = UIKit.Label(UIKit.TopStrip(b, "Hint", 190f, 56f, 32f, 32f), "Text", "", 18, TextAnchor.MiddleCenter, Theme.Gold, FontStyle.Italic);
+
+            var buttons = UIKit.Rect(b, "Buttons", new Vector2(0, 0), new Vector2(1, 0), new Vector2(24, 20), new Vector2(-24, 70));
+            UIKit.HRow(buttons, 12, null, true);
+            var levels = UIKit.Button(buttons, "Levels", "Level list", 17, Theme.Raised, () => popup.Fire(popup.BackToLevels), 12f);
+            UIKit.Layout(levels, -1, 50, 1f);
+            popup.editButton = UIKit.Button(buttons, "Edit", "Edit cards", 17, Theme.Raised, () => popup.Fire(popup.EditRules), 12f);
+            UIKit.Layout(popup.editButton, -1, 50, 1f);
+            popup.nextButton = UIKit.Button(buttons, "Next", "Next level  >", 17, Theme.Accent, () => popup.Fire(popup.NextLevel), 12f);
+            UIKit.Layout(popup.nextButton, -1, 50, 1f);
 
             root.gameObject.SetActive(false);
             return popup;
+        }
+
+        static Text Stat(RectTransform row, string label, Color valueColor)
+        {
+            var box = UIKit.Box(row, label, Theme.Surface2, 12f, Vector2.zero, Vector2.one);
+            UIKit.Layout(box, -1, 64, 1f);
+            UIKit.Label(UIKit.TopStrip(box.transform, "Label", 8f, 16f), "Text", label, 12, TextAnchor.MiddleCenter, Theme.Dim, FontStyle.Bold);
+            return UIKit.Label(UIKit.TopStrip(box.transform, "Value", 24f, 34f), "Text", "", 28, TextAnchor.MiddleCenter, valueColor, FontStyle.Bold);
         }
 
         void Fire(Action a)
@@ -50,17 +64,21 @@ namespace RuleRunner.UI
             a?.Invoke();
         }
 
-        public void Show(RunResult result, bool hasNextLevel)
+        public void Show(RunResult result, LevelDef level, int cardCount, bool hasNextLevel)
         {
             bool won = result.Won;
-            title.text = won ? "Level clear!" : "Run failed";
-            title.color = won ? new Color32(0x7d, 0xe0, 0x8c, 0xff) : new Color32(0xff, 0x8a, 0x8a, 0xff);
-            message.text = won
-                ? "Qi left: " + result.QiLeft + "   Steps: " + result.Steps
-                : Vocabulary.Describe(result.Outcome) + " (step " + result.Steps + ", qi left " + result.QiLeft + ")";
-            hint.text = won ? "" : HintFor(result);
+            title.text = won ? "LEVEL CLEAR" : "RUN FAILED";
+            title.color = won ? Theme.Hex(0x7de08c) : Theme.Hex(0xff8a8a);
+            accent.color = won ? Theme.Accent : Theme.Danger;
+            cause.text = won ? "The runner reached the flag." : Vocabulary.Describe(result.Outcome) + " at step " + result.Steps + ".";
+            qiValue.text = result.QiLeft.ToString();
+            stepValue.text = result.Steps.ToString();
+            cardValue.text = cardCount.ToString();
+            hint.text = won
+                ? (result.QiLeft >= level.SolutionQiLeft ? "Perfect run - no qi wasted." : "This level can be cleared with " + level.SolutionQiLeft + " qi left.")
+                : HintFor(result);
             nextButton.gameObject.SetActive(won && hasNextLevel);
-            UIKit.ButtonText(editButton).text = won ? "Try again" : "Edit rules";
+            UIKit.ButtonText(editButton).text = won ? "Try again" : "Edit cards";
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
         }
@@ -69,13 +87,13 @@ namespace RuleRunner.UI
 
         public static string HintFor(RunResult r)
         {
-            if (r.RanOutOfQi) return "Did a rule fire more often than needed?";
+            if (r.RanOutOfQi) return "Did a card fire more often than needed?";
             switch (r.Outcome)
             {
-                case Outcome.Pit: return "Which rule should have fired before the pit?";
+                case Outcome.Pit: return "Which card should have fired before the pit?";
                 case Outcome.Spike: return "Was the landing spot safe?";
                 case Outcome.Trap: return "Was the trap up when you stepped on it?";
-                case Outcome.Timeout: return "Is a rule making the runner wait or bump into a wall forever?";
+                case Outcome.Timeout: return "Is a card making the runner wait or bump into a wall forever?";
                 default: return "";
             }
         }

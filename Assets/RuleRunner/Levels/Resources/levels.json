@@ -2,7 +2,7 @@
   "levels": [
     {
       "id": "1-1", "chapter": 1, "title": "Rules Fire Themselves",
-      "hint": "Press Run with no rules and watch. A rule fires every time its condition comes true - anywhere on the map.",
+      "hint": "Press Run with no cards and watch. A card fires every time its condition comes true - anywhere on the map.",
       "map": "ggggpggggpgggpggf", "start": 0, "dir": 1, "qi": 5, "slots": 2,
       "conditions": ["pit"], "actions": ["jump"],
       "solution": ["IF pit THEN jump"], "solutionQiLeft": 2,
@@ -10,7 +10,7 @@
     },
     {
       "id": "1-2", "chapter": 1, "title": "One Card, Many Dangers",
-      "hint": "Only one slot. NOT can fold several dangers into a single rule.",
+      "hint": "Only one card slot. NOT can fold several dangers into a single card.",
       "map": "gggpgggsggpggsgggf", "start": 0, "dir": 1, "qi": 6, "slots": 1,
       "conditions": ["ground", "pit", "spike"], "actions": ["jump"],
       "solution": ["IF NOT ground THEN jump"], "solutionQiLeft": 2,
@@ -26,7 +26,7 @@
     },
     {
       "id": "1-4", "chapter": 1, "title": "Top To Bottom",
-      "hint": "Rules are checked from top to bottom and only the first true one fires. Put the more specific rule higher.",
+      "hint": "Cards are checked left to right and only the first true one fires. Put the more specific card first.",
       "map": "gggsggpsgggpggppgggf", "start": 0, "dir": 1, "qi": 11, "slots": 2,
       "conditions": ["ground", "pit", "spike", "wall"], "actions": ["jump", "bigjump"],
       "solution": ["IF pit THEN bigjump", "IF NOT ground THEN jump"], "solutionQiLeft": 1,
@@ -76,7 +76,7 @@
     },
     {
       "id": "2-5", "chapter": 2, "title": "Everything You Know",
-      "hint": "Every tool so far. A Walk rule can stop the rules below it from firing.",
+      "hint": "Every tool so far. A Walk card can stop the cards after it from firing.",
       "map": "ggpgggsggpsgggTgggoggwggppggf", "start": 0, "dir": 1, "qi": 8, "slots": 4,
       "conditions": ["ground", "pit", "spike", "wall", "ground2", "trap"], "actions": ["walk", "jump", "bigjump", "wait"],
       "solution": ["IF trap THEN wait", "IF ground THEN walk", "IF NOT ground2 THEN bigjump", "IF NOT ground THEN jump"], "solutionQiLeft": 0,

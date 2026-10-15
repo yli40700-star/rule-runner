@@ -8,29 +8,38 @@ using UnityEngine.UI;
 namespace RuleRunner.UI
 {
     /// <summary>
-    /// Edit-and-run screen. Owns the rule list being edited; the App layer drives the run.
-    /// Layout (1280x720 reference): header on top, map in the middle (drawn by the camera),
-    /// rule cards bottom-left, controls and run log bottom-right.
+    /// Edit-and-run screen (1280x720 reference).
+    ///   top:     header (back, level chip, title, hint)
+    ///   middle:  the map, drawn by the camera, with a tile legend underneath
+    ///   bottom:  the runner's loadout (portrait + qi pool + skill cards) and the run controls / log
+    /// Owns the rule list being edited; the App layer drives the run.
     /// </summary>
     public class GameScreen : MonoBehaviour
     {
         public event Action Back, Run, Reset;
         public event Action<float> SpeedChanged;
 
-        public const float HeaderFraction = 0.13f;
-        public const float BottomFraction = 0.45f;
+        const float HeaderPx = 64f;
+        const float BottomPx = 300f;
+        public const float HeaderFraction = HeaderPx / 720f;
+        public const float BottomFraction = BottomPx / 720f;
         const int MaxLogLines = 250;
+        const int MaxPips = 24;
 
         public List<Rule> Rules { get; private set; } = new List<Rule>();
         public LevelDef Level { get; private set; }
         public RectTransform CanvasRect { get; private set; }
+        public float Speed => speed;
 
-        Text titleText, hintText, qiText, slotText, availableText, floatText;
-        RectTransform qiFill, cardList, logContent;
+        Text levelChipText, titleText, hintText, loadoutText, qiText, floatText, defaultText;
+        RectTransform cardRow, pipGrid, logContent, floatBubble;
         ScrollRect logScroll;
-        Button addButton, runButton, resetButton, speedButton;
+        Button runButton, resetButton;
+        readonly List<Button> speedButtons = new List<Button>();
         OptionPicker picker;
         readonly List<RuleCardView> cards = new List<RuleCardView>();
+        readonly List<EmptySlotView> emptySlots = new List<EmptySlotView>();
+        readonly List<Image> pipImages = new List<Image>();
         readonly Queue<GameObject> logLines = new Queue<GameObject>();
         bool editable = true;
         float speed = 1f;
@@ -44,45 +53,36 @@ namespace RuleRunner.UI
             screen.picker = picker;
             screen.BuildHeader(root);
             screen.BuildLegend(root);
-            screen.BuildRulesPanel(root);
-            screen.BuildRunPanel(root);
-
-            var floatRt = UIKit.Rect(root, "FloatingText", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            floatRt.sizeDelta = new Vector2(320, 40);
-            screen.floatText = UIKit.Label(floatRt, "Text", "", 24, TextAnchor.MiddleCenter, new Color32(0xf5, 0xd0, 0x3b, 0xff));
-            screen.floatText.fontStyle = FontStyle.Bold;
-            screen.floatText.horizontalOverflow = HorizontalWrapMode.Overflow;
-            screen.floatText.gameObject.AddComponent<Outline>().effectColor = Color.black;
+            screen.BuildLoadout(root);
+            screen.BuildControls(root);
+            screen.BuildFloatingBubble(root);
             return screen;
         }
 
+        // ---------- Layout ----------
+
         void BuildHeader(Transform root)
         {
-            var header = UIKit.Panel(root, "Header", UIKit.PanelColor, new Vector2(0, 1 - HeaderFraction), Vector2.one);
-            var back = UIKit.Button(header.transform, "Back", "< Levels", 20, UIKit.ButtonColor, () => Back?.Invoke());
-            SetRect(back.transform, new Vector2(0, 0.5f), new Vector2(0, 0.5f), new Vector2(14, -24), new Vector2(134, 24));
+            var header = UIKit.Panel(root, "Header", Theme.Surface, new Vector2(0, 1), Vector2.one, new Vector2(0, -HeaderPx), Vector2.zero);
+            UIKit.Panel(header.transform, "Edge", Theme.Line, Vector2.zero, new Vector2(1, 0), Vector2.zero, new Vector2(0, 1));
 
-            var titleRt = UIKit.Rect(header.transform, "Title", new Vector2(0, 0.5f), new Vector2(1, 1), new Vector2(150, 0), new Vector2(-330, -4));
-            titleText = UIKit.Label(titleRt, "Text", "", 28);
-            titleText.fontStyle = FontStyle.Bold;
-            var hintRt = UIKit.Rect(header.transform, "Hint", new Vector2(0, 0), new Vector2(1, 0.5f), new Vector2(150, 4), new Vector2(-330, 0));
-            hintText = UIKit.Label(hintRt, "Text", "", 18, TextAnchor.UpperLeft, UIKit.DimText);
+            var back = UIKit.Button(header.transform, "Back", "<  Levels", 17, Theme.Raised, () => Back?.Invoke(), 10f);
+            Place(back.transform, new Vector2(0, 0.5f), new Vector2(14, 0), new Vector2(112, 40), new Vector2(0, 0.5f));
 
-            var qiBg = UIKit.Panel(header.transform, "QiBar", new Color(0, 0, 0, 0.35f), new Vector2(1, 0.5f), new Vector2(1, 0.5f),
-                new Vector2(-316, -20), new Vector2(-16, 20));
-            var fill = UIKit.Panel(qiBg.transform, "Fill", Palette.Orb, Vector2.zero, Vector2.one);
-            qiFill = fill.rectTransform;
-            qiText = UIKit.Label(qiBg.transform, "Text", "Qi", 22, TextAnchor.MiddleCenter);
-            qiText.fontStyle = FontStyle.Bold;
-            qiText.gameObject.AddComponent<Outline>().effectColor = new Color(0, 0, 0, 0.8f);
+            var chip = UIKit.Box(header.transform, "LevelChip", Theme.Gold, 12f, new Vector2(0, 0.5f), new Vector2(0, 0.5f));
+            Place(chip.transform, new Vector2(0, 0.5f), new Vector2(142, 0), new Vector2(64, 40), new Vector2(0, 0.5f));
+            levelChipText = UIKit.Label(chip.transform, "Text", "1-1", 20, TextAnchor.MiddleCenter, Theme.Background, FontStyle.Bold);
+
+            titleText = UIKit.Label(UIKit.Rect(header.transform, "Title", new Vector2(0, 0.5f), new Vector2(1, 1), new Vector2(222, -2), new Vector2(-20, -6)),
+                "Text", "", 24, TextAnchor.LowerLeft, Theme.Text, FontStyle.Bold);
+            hintText = UIKit.Label(UIKit.Rect(header.transform, "Hint", new Vector2(0, 0), new Vector2(1, 0.5f), new Vector2(222, 2), new Vector2(-20, 0)),
+                "Text", "", 15, TextAnchor.UpperLeft, Theme.Dim, FontStyle.Italic);
         }
 
         void BuildLegend(Transform root)
         {
-            float y = BottomFraction;
-            var legend = UIKit.Rect(root, "Legend", new Vector2(0, y), new Vector2(1, y), new Vector2(16, 4), new Vector2(-16, 30));
-            UIKit.HRow(legend, 6);
-            legend.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
+            var legend = UIKit.Rect(root, "Legend", new Vector2(0, 0), new Vector2(1, 0), new Vector2(16, BottomPx + 2), new Vector2(-16, BottomPx + 28));
+            UIKit.HRow(legend, 6, null, false, TextAnchor.MiddleCenter);
             var items = new (string, Color)[]
             {
                 ("Ground", Palette.Ground), ("Pit", Palette.PitHole), ("Spike", Palette.Spike),
@@ -91,58 +91,124 @@ namespace RuleRunner.UI
             };
             foreach (var (name, color) in items)
             {
-                var swatch = UIKit.Panel(legend, "Swatch", color, Vector2.zero, Vector2.one);
-                UIKit.Layout(swatch, preferredWidth: 14, preferredHeight: 14);
-                var label = UIKit.Label(legend, "Label", name, 15, TextAnchor.MiddleLeft, UIKit.DimText);
+                var swatch = UIKit.Rect(legend, "Swatch", Vector2.zero, Vector2.one);
+                UIKit.Round(swatch.gameObject.AddComponent<Image>(), 3f).color = color;
+                UIKit.Layout(swatch, 12, 12);
+                var label = UIKit.Label(legend, "Label", name, 14, TextAnchor.MiddleLeft, Theme.Dim);
                 label.horizontalOverflow = HorizontalWrapMode.Overflow;
-                UIKit.Layout(label, preferredWidth: label.preferredWidth + 12);
+                UIKit.Layout(label, label.preferredWidth + 14, 20);
             }
         }
 
-        void BuildRulesPanel(Transform root)
+        void BuildLoadout(Transform root)
         {
-            var panel = UIKit.Panel(root, "RulesPanel", UIKit.PanelColor, new Vector2(0, 0), new Vector2(0.62f, BottomFraction),
-                new Vector2(10, 10), new Vector2(-5, -4));
+            var tray = UIKit.Box(root, "Loadout", Theme.Surface, 16f, new Vector2(0, 0), new Vector2(1, 0),
+                new Vector2(12, 12), new Vector2(-376, BottomPx - 8));
+            UIKit.DropShadow(tray, 4f, 0.35f);
 
-            var top = UIKit.Rect(panel.transform, "Top", new Vector2(0, 1), new Vector2(1, 1), new Vector2(14, -50), new Vector2(-14, -8));
-            slotText = UIKit.Label(top, "Slots", "", 20);
-            addButton = UIKit.Button(top, "Add", "+ Add rule", 20, UIKit.AccentColor, AddRule);
-            SetRect(addButton.transform, new Vector2(1, 0), new Vector2(1, 1), new Vector2(-150, 0), Vector2.zero);
+            var head = UIKit.TopStrip(tray.transform, "Head", 8f, 26f, 18f, 18f);
+            UIKit.Label(head, "Title", "LOADOUT", 15, TextAnchor.MiddleLeft, Theme.Gold, FontStyle.Bold);
+            loadoutText = UIKit.Label(UIKit.Rect(head, "Info", Vector2.zero, Vector2.one, new Vector2(84, 0), Vector2.zero),
+                "Text", "", 14, TextAnchor.MiddleLeft, Theme.Dim);
+            defaultText = UIKit.Label(head, "Default", "No card fires -> Walk (free)", 14, TextAnchor.MiddleRight, Theme.Faint);
 
-            cardList = UIKit.Rect(panel.transform, "Cards", new Vector2(0, 0), new Vector2(1, 1), new Vector2(14, 44), new Vector2(-14, -58));
-            UIKit.VColumn(cardList, 6);
-
-            var availRt = UIKit.Rect(panel.transform, "Available", new Vector2(0, 0), new Vector2(1, 0), new Vector2(14, 6), new Vector2(-14, 40));
-            availableText = UIKit.Label(availRt, "Text", "", 16, TextAnchor.MiddleLeft, UIKit.DimText);
+            cardRow = UIKit.Rect(tray.transform, "Row", Vector2.zero, Vector2.one, new Vector2(14, 12), new Vector2(-14, -40));
+            UIKit.HRow(cardRow, 12, null, false, TextAnchor.MiddleLeft);
+            BuildRunnerPanel(cardRow);
         }
 
-        void BuildRunPanel(Transform root)
+        void BuildRunnerPanel(RectTransform row)
         {
-            var panel = UIKit.Panel(root, "RunPanel", UIKit.PanelColor, new Vector2(0.62f, 0), new Vector2(1, BottomFraction),
-                new Vector2(5, 10), new Vector2(-10, -4));
+            var panel = UIKit.Box(row, "Runner", Theme.Surface2, 14f, Vector2.zero, Vector2.one);
+            UIKit.Layout(panel, 138, RuleCardView.CardSize.y);
+            var p = panel.transform;
 
-            var controls = UIKit.Rect(panel.transform, "Controls", new Vector2(0, 1), new Vector2(1, 1), new Vector2(12, -58), new Vector2(-12, -8));
-            UIKit.HRow(controls, 8, null, expandWidth: true);
-            runButton = UIKit.Button(controls, "Run", "RUN", 24, UIKit.AccentColor, () => Run?.Invoke());
-            UIKit.Layout(runButton, flexibleWidth: 2);
-            UIKit.ButtonText(runButton).fontStyle = FontStyle.Bold;
-            resetButton = UIKit.Button(controls, "Reset", "Reset", 22, UIKit.ButtonColor, () => Reset?.Invoke());
-            UIKit.Layout(resetButton, flexibleWidth: 1);
-            speedButton = UIKit.Button(controls, "Speed", "1x", 22, UIKit.ButtonColor, CycleSpeed);
-            UIKit.Layout(speedButton, flexibleWidth: 1);
+            UIKit.Label(UIKit.TopStrip(p, "Label", 10f, 18f), "Text", "RUNNER", 13, TextAnchor.MiddleCenter, Theme.Dim, FontStyle.Bold);
+            // Portrait: the same yellow block as in the map, on a little pedestal.
+            var portraitBg = UIKit.Shape(p, "Glow", UISprites.Circle, Palette.Runner.WithAlpha(0.12f), Vector2.zero, new Vector2(84, 84));
+            Top(portraitBg.rectTransform, 66f);
+            var body = UIKit.Shape(p, "Body", UISprites.Rounded, Palette.Runner, Vector2.zero, new Vector2(46, 46));
+            UIKit.Round(body, 8f);
+            Top(body.rectTransform, 66f);
+            var eye = UIKit.Shape(p, "Eye", UISprites.Rounded, Palette.RunnerEye, Vector2.zero, new Vector2(8, 12));
+            Top(eye.rectTransform, 62f, 10f);
 
-            var logArea = UIKit.Rect(panel.transform, "Log", Vector2.zero, Vector2.one, new Vector2(12, 12), new Vector2(-12, -66));
+            UIKit.Panel(p, "Divider", Theme.Line, new Vector2(0, 1), new Vector2(1, 1), new Vector2(14, -122), new Vector2(-14, -121));
+            UIKit.Label(UIKit.TopStrip(p, "QiLabel", 128f, 16f, 12f, 12f), "Text", "QI POOL", 12, TextAnchor.MiddleCenter, Theme.Dim, FontStyle.Bold);
+            qiText = UIKit.Label(UIKit.TopStrip(p, "QiValue", 145f, 24f, 12f, 12f), "Text", "0", 22, TextAnchor.MiddleCenter, Theme.Qi, FontStyle.Bold);
+
+            pipGrid = UIKit.TopStrip(p, "Pips", 176f, 46f, 12f, 12f);
+            var grid = pipGrid.gameObject.AddComponent<GridLayoutGroup>();
+            grid.cellSize = new Vector2(11, 11);
+            grid.spacing = new Vector2(3, 3);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = 8;
+            grid.childAlignment = TextAnchor.UpperCenter;
+        }
+
+        static void Top(RectTransform rt, float centerFromTop, float x = 0f)
+        {
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(x, -centerFromTop);
+        }
+
+        void BuildControls(Transform root)
+        {
+            var controls = UIKit.Box(root, "Controls", Theme.Surface, 16f, new Vector2(1, 0), new Vector2(1, 0),
+                new Vector2(-364, BottomPx - 8 - 112), new Vector2(-12, BottomPx - 8));
+            UIKit.DropShadow(controls, 4f, 0.35f);
+
+            runButton = UIKit.Button(controls.transform, "Run", "RUN", 24, Theme.Accent, () => Run?.Invoke(), 12f);
+            var runRt = (RectTransform)runButton.transform;
+            runRt.anchorMin = new Vector2(0, 1);
+            runRt.anchorMax = new Vector2(1, 1);
+            runRt.offsetMin = new Vector2(12, -64);
+            runRt.offsetMax = new Vector2(-12, -12);
+            UIKit.DropShadow((Image)runButton.targetGraphic, 3f, 0.4f);
+
+            var row = UIKit.Rect(controls.transform, "Row", new Vector2(0, 0), new Vector2(1, 0), new Vector2(12, 10), new Vector2(-12, 44));
+            UIKit.HRow(row, 6, null, true, TextAnchor.MiddleLeft);
+            resetButton = UIKit.Button(row, "Reset", "Reset", 16, Theme.Raised, () => Reset?.Invoke(), 9f);
+            UIKit.Layout(resetButton, -1, 34, 1.4f);
+            var gap = UIKit.Rect(row, "Gap", Vector2.zero, Vector2.one);
+            UIKit.Layout(gap, 8, 34);
+            foreach (var s in new[] { 1f, 2f, 4f })
+            {
+                float value = s;
+                var b = UIKit.Button(row, "Speed" + s, s + "x", 15, Theme.Raised, () => SetSpeed(value), 9f);
+                UIKit.Layout(b, -1, 34, 1f);
+                speedButtons.Add(b);
+            }
+            SetSpeed(1f);
+
+            var log = UIKit.Box(root, "Log", Theme.Surface, 16f, new Vector2(1, 0), new Vector2(1, 0),
+                new Vector2(-364, 12), new Vector2(-12, BottomPx - 8 - 112 - 10));
+            UIKit.DropShadow(log, 4f, 0.35f);
+            UIKit.Label(UIKit.TopStrip(log.transform, "Title", 8f, 20f, 14f, 14f), "Text", "RUN LOG", 13, TextAnchor.MiddleLeft, Theme.Dim, FontStyle.Bold);
+            var logArea = UIKit.Rect(log.transform, "Area", Vector2.zero, Vector2.one, new Vector2(8, 8), new Vector2(-8, -30));
             logContent = UIKit.ScrollView(logArea, "Scroll", out logScroll);
-            UIKit.VColumn(logContent, 2, new RectOffset(8, 8, 6, 6));
+            UIKit.VColumn(logContent, 3, new RectOffset(6, 6, 2, 4));
         }
 
-        static void SetRect(Transform t, Vector2 aMin, Vector2 aMax, Vector2 oMin, Vector2 oMax)
+        void BuildFloatingBubble(Transform root)
+        {
+            var bubble = UIKit.Box(root, "FloatingBubble", Theme.Background.WithAlpha(0.92f), 12f, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            floatBubble = bubble.rectTransform;
+            floatBubble.sizeDelta = new Vector2(170, 32);
+            bubble.raycastTarget = false;
+            bubble.gameObject.AddComponent<Outline>().effectColor = Theme.Gold.WithAlpha(0.8f);
+            floatText = UIKit.Label(floatBubble, "Text", "", 16, TextAnchor.MiddleCenter, Theme.Gold, FontStyle.Bold);
+            floatText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            floatBubble.gameObject.SetActive(false);
+        }
+
+        static void Place(Transform t, Vector2 anchor, Vector2 pos, Vector2 size, Vector2 pivot)
         {
             var rt = (RectTransform)t;
-            rt.anchorMin = aMin;
-            rt.anchorMax = aMax;
-            rt.offsetMin = oMin;
-            rt.offsetMax = oMax;
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = pivot;
+            rt.sizeDelta = size;
+            rt.anchoredPosition = pos;
         }
 
         // ---------- Level setup and rule editing ----------
@@ -151,19 +217,12 @@ namespace RuleRunner.UI
         {
             Level = level;
             Rules = rules;
-            titleText.text = "Level " + level.Id + "   " + level.Title;
+            levelChipText.text = level.Id;
+            titleText.text = level.Title;
             hintText.text = level.Hint;
-
-            var conds = new List<string>();
-            foreach (var c in level.Conditions) conds.Add(Vocabulary.Display(c));
-            var acts = new List<string>();
-            foreach (var a in level.Actions) acts.Add(RuleCardView.ActionLabel(a));
-            availableText.text = "IF: " + string.Join(", ", conds) + "     THEN: " + string.Join(", ", acts) +
-                                 "     No rule true -> Walk (free)";
-
             SetEditable(true);
             ClearLog();
-            Log("Level " + level.Id + ": write rules, then press RUN.", UIKit.DimText);
+            Log("Equip cards, then press RUN.", Theme.Dim);
             HideFloat();
         }
 
@@ -176,31 +235,41 @@ namespace RuleRunner.UI
 
         void RebuildCards()
         {
+            int slots = Level != null ? Level.Slots : 0;
             while (cards.Count < Rules.Count)
             {
-                var card = RuleCardView.Create(cardList);
+                var card = RuleCardView.Create(cardRow);
                 card.ToggleNot += c => Edit(c.Index, r => r.Negate = !r.Negate);
                 card.PickCondition += OnPickCondition;
                 card.PickAction += OnPickAction;
-                card.MoveUp += c => Move(c.Index, -1);
-                card.MoveDown += c => Move(c.Index, +1);
+                card.MoveLeft += c => Move(c.Index, -1);
+                card.MoveRight += c => Move(c.Index, +1);
                 card.Remove += c => { if (editable) { Rules.RemoveAt(c.Index); RebuildCards(); } };
                 cards.Add(card);
             }
+            while (emptySlots.Count < slots - Rules.Count)
+                emptySlots.Add(EmptySlotView.Create(cardRow, AddRule));
+
+            // Order in the row: runner panel, cards (priority order), empty slots.
             for (int i = 0; i < cards.Count; i++)
             {
                 bool show = i < Rules.Count;
                 cards[i].gameObject.SetActive(show);
-                if (show)
-                {
-                    cards[i].Bind(i, Rules[i], i == 0, i == Rules.Count - 1, editable);
-                    cards[i].SetActive(false);
-                    cards[i].SetHits(0);
-                }
+                if (!show) continue;
+                cards[i].transform.SetSiblingIndex(1 + i);
+                cards[i].Bind(i, Rules[i], i == 0, i == Rules.Count - 1, editable);
+                cards[i].SetState(false);
+                cards[i].SetHits(0);
             }
-            int slots = Level != null ? Level.Slots : 0;
-            slotText.text = "Rules  " + Rules.Count + " / " + slots + "   (checked top to bottom, first true rule fires)";
-            addButton.interactable = editable && Rules.Count < slots;
+            for (int i = 0; i < emptySlots.Count; i++)
+            {
+                bool show = i < slots - Rules.Count;
+                emptySlots[i].gameObject.SetActive(show);
+                emptySlots[i].transform.SetAsLastSibling();
+                emptySlots[i].SetInteractable(editable);
+            }
+
+            loadoutText.text = Rules.Count + " / " + slots + " cards   -   checked left to right, the first true card fires";
         }
 
         void AddRule()
@@ -228,41 +297,52 @@ namespace RuleRunner.UI
         void OnPickCondition(RuleCardView card)
         {
             if (!editable) return;
-            var options = Level.Conditions.ConvertAll(Vocabulary.Display);
-            picker.Show("IF ...", options, Level.Conditions.IndexOf(Rules[card.Index].Condition),
-                i => Edit(card.Index, r => r.Condition = Level.Conditions[i]));
+            var rule = Rules[card.Index];
+            picker.ShowConditions("IF ...", "What should card " + (card.Index + 1) + " look for?", Level.Conditions, rule.Negate,
+                rule.Condition, c => Edit(card.Index, r => r.Condition = c));
         }
 
         void OnPickAction(RuleCardView card)
         {
             if (!editable) return;
-            var options = Level.Actions.ConvertAll(RuleCardView.ActionLabel);
-            picker.Show("THEN ...", options, Level.Actions.IndexOf(Rules[card.Index].Action),
-                i => Edit(card.Index, r => r.Action = Level.Actions[i]));
+            picker.ShowActions("THEN ...", "What should card " + (card.Index + 1) + " do?", Level.Actions,
+                Rules[card.Index].Action, a => Edit(card.Index, r => r.Action = a));
         }
 
-        void CycleSpeed()
+        void SetSpeed(float value)
         {
-            speed = speed >= 4f ? 1f : speed * 2f;
-            UIKit.ButtonText(speedButton).text = speed + "x";
+            speed = value;
+            float[] values = { 1f, 2f, 4f };
+            for (int i = 0; i < speedButtons.Count; i++)
+                ((Image)speedButtons[i].targetGraphic).color = Mathf.Approximately(values[i], value) ? Theme.Qi.WithAlpha(0.85f) : Theme.Raised;
             SpeedChanged?.Invoke(speed);
         }
-
-        public float Speed => speed;
 
         // ---------- Run feedback ----------
 
         public void SetQi(int qi, int max)
         {
-            int cap = Mathf.Max(max, qi, 1);
-            qiFill.anchorMax = new Vector2(Mathf.Clamp01((float)qi / cap), 1f);
-            qiText.text = "Qi  " + qi + " / " + max;
+            qiText.text = qi + " / " + max;
+            int total = Mathf.Min(Mathf.Max(max, qi), MaxPips);
+            while (pipImages.Count < total)
+            {
+                var pip = UIKit.Rect(pipGrid, "Pip", Vector2.zero, Vector2.one);
+                var img = pip.gameObject.AddComponent<Image>();
+                img.sprite = UISprites.Circle;
+                img.raycastTarget = false;
+                pipImages.Add(img);
+            }
+            for (int i = 0; i < pipImages.Count; i++)
+            {
+                pipImages[i].gameObject.SetActive(i < total);
+                pipImages[i].color = i < qi ? Theme.Qi : Theme.Raised;
+            }
         }
 
         public void HighlightRule(int fired, int starved)
         {
             for (int i = 0; i < Rules.Count && i < cards.Count; i++)
-                cards[i].SetActive(i == fired, i == starved);
+                cards[i].SetState(i == fired, i == starved);
         }
 
         public void SetHits(int[] hits)
@@ -273,8 +353,7 @@ namespace RuleRunner.UI
 
         public void Log(string line, Color? color = null)
         {
-            var text = UIKit.Label(logContent, "Line", line, 17, TextAnchor.UpperLeft, color ?? UIKit.TextColor);
-            text.verticalOverflow = VerticalWrapMode.Overflow;
+            var text = UIKit.Label(logContent, "Line", line, 14, TextAnchor.UpperLeft, color ?? Theme.Text);
             var fitter = text.gameObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             logLines.Enqueue(text.gameObject);
@@ -288,19 +367,19 @@ namespace RuleRunner.UI
             while (logLines.Count > 0) Destroy(logLines.Dequeue());
         }
 
-        /// <summary>Shows a short label (e.g. "Rule 2: Jump -1") at a canvas position for about a second.</summary>
+        /// <summary>Shows a short bubble (e.g. "Rule 2: Jump -1") above the runner for a moment.</summary>
         public void ShowFloat(Vector2 canvasPos, string text, float seconds)
         {
-            var rt = (RectTransform)floatText.transform.parent;
-            rt.anchoredPosition = canvasPos;
+            floatBubble.anchoredPosition = canvasPos + new Vector2(0f, 18f);
             floatText.text = text;
-            floatText.enabled = true;
+            floatBubble.sizeDelta = new Vector2(floatText.preferredWidth + 28f, 32f);
+            floatBubble.gameObject.SetActive(true);
             floatTimer = seconds;
         }
 
         public void HideFloat()
         {
-            floatText.enabled = false;
+            floatBubble.gameObject.SetActive(false);
             floatTimer = 0f;
         }
 

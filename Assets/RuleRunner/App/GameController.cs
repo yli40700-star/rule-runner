@@ -54,12 +54,12 @@ namespace RuleRunner.App
             cameraFitter = cam.GetComponent<CameraFitter>();
             if (cameraFitter == null) cameraFitter = cam.gameObject.AddComponent<CameraFitter>();
             cameraFitter.headerHeight = GameScreen.HeaderFraction;
-            cameraFitter.viewportHeight = 1f - GameScreen.HeaderFraction - GameScreen.BottomFraction - 0.045f;
+            cameraFitter.viewportHeight = 1f - GameScreen.HeaderFraction - GameScreen.BottomFraction - 34f / 720f;
 
             // The main camera only draws the map strip; this one clears the rest of the screen every frame.
             var bg = new GameObject("Background Camera").AddComponent<Camera>();
             bg.clearFlags = CameraClearFlags.SolidColor;
-            bg.backgroundColor = Palette.Background;
+            bg.backgroundColor = Theme.Background;
             bg.cullingMask = 0;
             bg.depth = cam.depth - 1;
 
@@ -142,7 +142,7 @@ namespace RuleRunner.App
             var rules = new List<Rule>(gameScreen.Rules.ConvertAll(r => r.Clone()));
             var result = Simulator.Run(level, rules);
             analytics.RunFinished(level, rules, result);
-            gameScreen.Log("--- Run with " + rules.Count + " rule(s), qi " + level.Qi + " ---", UIKit.DimText);
+            gameScreen.Log("--- Run: " + rules.Count + (rules.Count == 1 ? " card" : " cards") + ", qi " + level.Qi + " ---", Theme.Dim);
             playback = StartCoroutine(Play(rules, result));
         }
 
@@ -180,13 +180,13 @@ namespace RuleRunner.App
                     gameScreen.SetHits(hits);
                     var rule = rules[f.FiredRule];
                     int cost = Vocabulary.Cost(rule.Action);
-                    string label = "Rule " + (f.FiredRule + 1) + ": " + Vocabulary.Display(rule.Action) + (cost > 0 ? " -" + cost : "");
+                    string label = "Card " + (f.FiredRule + 1) + ": " + Vocabulary.Display(rule.Action) + (cost > 0 ? " -" + cost : "");
                     gameScreen.ShowFloat(cameraFitter.WorldToCanvasPoint(runner.HeadPosition, gameScreen.CanvasRect), label, step * 1.2f);
                 }
                 else if (f.StarvedRule >= 0)
                 {
                     gameScreen.ShowFloat(cameraFitter.WorldToCanvasPoint(runner.HeadPosition, gameScreen.CanvasRect),
-                        "Rule " + (f.StarvedRule + 1) + ": no qi!", step * 1.2f);
+                        "Card " + (f.StarvedRule + 1) + ": no qi!", step * 1.2f);
                 }
                 gameScreen.SetQi(f.Qi, level.Qi);
                 gameScreen.Log(DescribeStep(f, rules), f.StarvedRule >= 0 ? new Color(1f, 0.6f, 0.6f) : (Color?)null);
@@ -202,19 +202,19 @@ namespace RuleRunner.App
 
             if (result.Won) PlayerPrefs.SetInt(ClearedKey + level.Id, 1);
             playback = null;
-            resultPopup.Show(result, LevelDatabase.Next(level) != null);
+            resultPopup.Show(result, level, rules.Count, LevelDatabase.Next(level) != null);
         }
 
         static string DescribeStep(StepFrame f, List<Rule> rules)
         {
             string s = "Step " + (f.T + 1) + " - ";
             if (f.FiredRule >= 0)
-                s += "Rule " + (f.FiredRule + 1) + " (" + rules[f.FiredRule].ToDisplayString() + ") fired, qi left " + f.Qi;
+                s += "Card " + (f.FiredRule + 1) + " (" + rules[f.FiredRule].ToDisplayString() + ") fired, qi left " + f.Qi;
             else if (f.StarvedRule >= 0)
-                s += "Rule " + (f.StarvedRule + 1) + " was true but needs " + Vocabulary.Cost(rules[f.StarvedRule].Action) +
+                s += "Card " + (f.StarvedRule + 1) + " was true but needs " + Vocabulary.Cost(rules[f.StarvedRule].Action) +
                      " qi (have " + f.QiBefore + ") - walked instead";
             else
-                s += "no rule true, Walk";
+                s += "no card fired, Walk";
             if (f.Blocked) s += " - blocked by a wall";
             if (f.CollectedOrb) s += " - picked up a qi orb (+" + Vocabulary.OrbQi + ")";
             return s;
