@@ -3,7 +3,8 @@
     "rootNamespace": "RuleRunner.EditorTools",
     "references": [
         "RuleRunner.Core",
-        "RuleRunner.Levels"
+        "RuleRunner.Levels",
+        "RuleRunner.App"
     ],
     "includePlatforms": ["Editor"],
     "excludePlatforms": [],
